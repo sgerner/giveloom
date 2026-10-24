@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 112" role="img" aria-labelledby="title">
+  <title id="title">Donor CRM</title>
+  <g transform="translate(0 0) scale(.7)"><path d="M80 116V72M80 88C62 88 48 77 43 59M80 79c18 0 32-11 37-29M80 114c-15 0-25 8-31 19m31-19c15 0 25 8 31 19" fill="none" stroke="#273d34" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><g fill="#c06d4f"><circle cx="80" cy="119" r="9"/><circle cx="48" cy="135" r="7"/><circle cx="112" cy="135" r="7"/></g><g fill="#6e9278"><circle cx="41" cy="54" r="9"/><circle cx="119" cy="48" r="9"/><circle cx="80" cy="71" r="8"/></g><g fill="#d5a94d"><circle cx="80" cy="30" r="7"/><circle cx="25" cy="91" r="5"/><circle cx="135" cy="91" r="5"/></g></g>
+  <text x="122" y="73" fill="#273d34" font-family="Georgia, 'Times New Roman', serif" font-size="42" letter-spacing="-.8">Donor CRM</text>
+</svg>

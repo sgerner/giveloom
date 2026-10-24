@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.21.1
+          cache: npm
+      - run: npm ci
+      - name: Install local queue test service
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm audit --audit-level=high
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:db
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Production PWA browser checks
+        run: npx playwright test --config playwright.pwa.config.ts
+      - name: Database-backed browser journeys
+        run: npm run test:db
+        env:
+          TEST_BROWSER_ONLY: 'true'
+          RUN_BROWSER_TESTS: 'true'

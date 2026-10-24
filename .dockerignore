@@ -1,0 +1,15 @@
+node_modules
+.svelte-kit
+build
+.git
+.env
+ops/backups
+playwright-report
+test-results
+test-results-*
+.data
+.env.*
+backups
+uploads
+exports
+coverage

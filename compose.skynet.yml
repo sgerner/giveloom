@@ -1,0 +1,66 @@
+# Shared-host deployment: the existing Caddy owns public ports and TLS.
+name: giveloom
+
+services:
+  postgres:
+    extends: { file: docker-compose.yml, service: postgres }
+  db-bootstrap:
+    extends: { file: docker-compose.yml, service: db-bootstrap }
+  redis:
+    extends: { file: docker-compose.yml, service: redis }
+  migrate:
+    extends: { file: docker-compose.yml, service: migrate }
+    image: giveloom:${APP_VERSION:-local}
+  web:
+    extends: { file: docker-compose.yml, service: web }
+    image: giveloom:${APP_VERSION:-local}
+    environment:
+      CLAMAV_HOST: clamav
+    networks:
+      default:
+      proxy:
+        aliases: [giveloom-web]
+  worker:
+    extends: { file: docker-compose.yml, service: worker }
+    image: giveloom:${APP_VERSION:-local}
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
+    security_opt: ['no-new-privileges:true']
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 2G
+  updater:
+    build:
+      context: .
+      dockerfile: Dockerfile.updater
+    image: giveloom-updater:local
+    restart: unless-stopped
+    working_dir: ${DEPLOY_DIR:-/home/skynet/opt/stacks/giveloom}
+    command: ['bash', 'ops/update-skynet.sh']
+    environment:
+      UPDATE_INTERVAL_SECONDS: ${UPDATE_INTERVAL_SECONDS:-900}
+      UPDATE_REPO_URL: https://github.com/sgerner/giveloom.git
+      UPDATE_BRANCH: main
+    volumes:
+      - ${DEPLOY_DIR:-/home/skynet/opt/stacks/giveloom}:${DEPLOY_DIR:-/home/skynet/opt/stacks/giveloom}
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/skynet/opt/appdata/giveloom/updater:/state
+    labels:
+      com.centurylinklabs.watchtower.enable: 'false'
+      diun.enable: 'false'
+
+networks:
+  proxy:
+    external: true
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:
+  exports:
+  backups:
+  clamav_data:

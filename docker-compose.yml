@@ -1,0 +1,246 @@
+name: donor-crm
+
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-donor_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-donor_crm_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    security_opt: ['no-new-privileges:true']
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 1G
+
+  db-bootstrap:
+    image: postgres:16.10-alpine
+    restart: 'no'
+    entrypoint: ['/bin/sh', '/ops/bootstrap-db.sh']
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-donor_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-donor_crm_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      APP_DB_USER: ${APP_DB_USER:-donor_crm_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      MIGRATION_USER: ${MIGRATION_USER:-donor_crm_migrator}
+      MIGRATION_PASSWORD: ${MIGRATION_PASSWORD:?Set MIGRATION_PASSWORD in .env}
+    volumes:
+      - ./ops/bootstrap-db.sh:/ops/bootstrap-db.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt: ['no-new-privileges:true']
+    read_only: true
+    tmpfs: ['/tmp:size=16m,noexec,nosuid']
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  redis:
+    image: redis:7.4.2-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1000']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    security_opt: ['no-new-privileges:true']
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  migrate:
+    build: .
+    image: donor-crm:${APP_VERSION:-local}
+    restart: 'no'
+    command: ['node_modules/.bin/tsx', 'scripts/migrate.ts']
+    environment:
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set MIGRATION_DATABASE_URL in .env}
+      APP_DB_USER: ${APP_DB_USER:-donor_crm_app}
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    security_opt: ['no-new-privileges:true']
+    read_only: true
+    tmpfs: ['/tmp:size=64m,noexec,nosuid']
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  web:
+    build: .
+    image: donor-crm:${APP_VERSION:-local}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN in .env}
+      BODY_SIZE_LIMIT: 30M
+      HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      EMAIL_SIGNING_SECRET: ${EMAIL_SIGNING_SECRET:?Set EMAIL_SIGNING_SECRET in .env}
+      CREDENTIAL_VAULT_KEY: ${CREDENTIAL_VAULT_KEY:-}
+      CREDENTIAL_VAULT_KEYRING: ${CREDENTIAL_VAULT_KEYRING:-}
+      CREDENTIAL_VAULT_KEY_ID: ${CREDENTIAL_VAULT_KEY_ID:-primary}
+      REDIS_URL: redis://redis:6379
+      FILE_SIGNING_SECRET: ${FILE_SIGNING_SECRET:?Set FILE_SIGNING_SECRET in .env}
+      STRIPE_PLATFORM_SECRET_KEY: ${STRIPE_PLATFORM_SECRET_KEY:-}
+      STRIPE_CONNECT_PUBLISHABLE_KEY: ${STRIPE_CONNECT_PUBLISHABLE_KEY:-}
+      STRIPE_CONNECT_CLIENT_ID: ${STRIPE_CONNECT_CLIENT_ID:-}
+      STRIPE_CONNECT_WEBHOOK_SECRET: ${STRIPE_CONNECT_WEBHOOK_SECRET:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      SES_FROM_ADDRESS: ${SES_FROM_ADDRESS:-}
+      SES_SNS_TOPIC_ARN: ${SES_SNS_TOPIC_ARN:-}
+      CLAMAV_HOST: ${CLAMAV_HOST:-}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      UPLOADS_DIR: /data/uploads
+      EXPORTS_DIR: /data/exports
+      PUBLIC_APP_URL: https://${APP_DOMAIN:?Set APP_DOMAIN in .env}
+    volumes:
+      - uploads:/data/uploads
+      - exports:/data/exports
+      - backups:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt: ['no-new-privileges:true']
+    read_only: true
+    tmpfs: ['/tmp:size=128m,noexec,nosuid']
+    cap_drop: ['ALL']
+    deploy:
+      resources:
+        limits:
+          cpus: '1.50'
+          memory: 1G
+
+  worker:
+    image: donor-crm:${APP_VERSION:-local}
+    restart: unless-stopped
+    command: ['node', 'build/worker.js']
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      REDIS_URL: redis://redis:6379
+      JOB_SIGNING_SECRET: ${JOB_SIGNING_SECRET:?Set JOB_SIGNING_SECRET in .env}
+      EMAIL_SIGNING_SECRET: ${EMAIL_SIGNING_SECRET:?Set EMAIL_SIGNING_SECRET in .env}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      SES_FROM_ADDRESS: ${SES_FROM_ADDRESS:-}
+      CREDENTIAL_VAULT_KEY: ${CREDENTIAL_VAULT_KEY:-}
+      CREDENTIAL_VAULT_KEYRING: ${CREDENTIAL_VAULT_KEYRING:-}
+      CREDENTIAL_VAULT_KEY_ID: ${CREDENTIAL_VAULT_KEY_ID:-primary}
+      PUBLIC_APP_URL: https://${APP_DOMAIN:?Set APP_DOMAIN in .env}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "require('node:fs').accessSync('/tmp/worker-ready')"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    security_opt: ['no-new-privileges:true']
+    read_only: true
+    tmpfs: ['/tmp:size=64m,noexec,nosuid']
+    cap_drop: ['ALL']
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 768M
+
+  reverse-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: donor-crm-caddy:${APP_VERSION:-local}
+    restart: unless-stopped
+    user: '10001:10001'
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports:
+      - '80:8080'
+      - '443:8443'
+      - '443:8443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    security_opt: ['no-new-privileges:true']
+    read_only: true
+    tmpfs: ['/tmp:size=32m,noexec,nosuid']
+    cap_drop: ['ALL']
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:
+  exports:
+  backups:
+  caddy_data:
+  caddy_config:

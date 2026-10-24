@@ -1,0 +1,11 @@
+node_modules
+.svelte-kit
+build
+.data
+test-results
+playwright-report
+package-lock.json
+static/icons
+static/brand
+src/lib/openapi.generated.json
+docs/openapi.generated.json

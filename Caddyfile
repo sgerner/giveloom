@@ -1,0 +1,12 @@
+{
+	email {$ACME_EMAIL}
+	http_port 8080
+	https_port 8443
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+	@blocked path /.env* /ops/* /docs/*
+	respond @blocked 404
+	reverse_proxy web:3000
+}

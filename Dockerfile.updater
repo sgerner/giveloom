@@ -1,0 +1,4 @@
+FROM docker:cli
+RUN apk add --no-cache bash git coreutils util-linux
+WORKDIR /app
+CMD ["bash", "ops/update-skynet.sh"]

@@ -1,0 +1,6 @@
+# Use alongside docker-compose.yml; start only postgres redis db-bootstrap.
+services:
+  postgres:
+    ports: ['127.0.0.1:55432:5432']
+  redis:
+    ports: ['127.0.0.1:56379:6379']

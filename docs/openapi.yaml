@@ -1,0 +1,1098 @@
+openapi: 3.1.0
+info:
+  title: GiveLoom API
+  version: 0.1.0
+  description: >-
+    Current HTTP surface for the in-progress self-hosted CRM. This hand-maintained
+    contract records implemented routes; it does not imply full feature completion.
+servers:
+  - url: https://{appDomain}
+    variables:
+      appDomain:
+        default: crm.example.org
+security:
+  - sessionCookie: []
+tags:
+  - name: Session
+  - name: Workspace
+  - name: Contacts
+  - name: Integrations
+  - name: AI
+  - name: Files
+  - name: Research
+  - name: Relationships
+  - name: Payments
+  - name: Automations
+  - name: Stewardship
+paths:
+  /api/v1/demo:
+    post:
+      tags: [Session]
+      security: []
+      summary: Start a development demo session
+      description: Only available when demo mode is enabled. The tenant is restricted to seeded demo workspaces.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                tenant: { type: string, enum: [riverstone, harbor] }
+      responses:
+        '200': { description: Demo session cookie set }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { description: Demo access disabled }
+    delete:
+      tags: [Session]
+      security: []
+      summary: End the current browser session
+      responses:
+        '200': { description: Session cookie cleared }
+  /api/v1/signup:
+    post:
+      tags: [Session]
+      security: []
+      summary: Create an owner account and tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password, name, organizationName]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 12, maxLength: 128 }
+                name: { type: string, minLength: 1, maxLength: 120 }
+                organizationName: { type: string, minLength: 2, maxLength: 180 }
+                tenantSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', maxLength: 48 }
+      responses:
+        '201': { description: Account created; signed HttpOnly session cookie set }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { description: Email or tenant slug already exists }
+        '429': { description: Signup rate limit reached }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/session:
+    get:
+      tags: [Session]
+      summary: Read current session identity and memberships
+      responses:
+        '200': { description: Current user and tenant membership summary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      tags: [Session]
+      security: []
+      summary: Sign in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password, tenant]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 1, maxLength: 1024 }
+                tenant: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '200': { description: Signed HttpOnly session cookie set }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { description: Email, password, or tenant is incorrect }
+        '429': { description: Login rate limit reached }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [Session]
+      summary: Revoke the current server-side session
+      responses:
+        '200': { description: Browser cookie cleared and session revoked }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/session/switch:
+    post:
+      tags: [Session]
+      summary: Switch to another active tenant membership
+      description: Tenant slug is validated against the authenticated user's memberships.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant]
+              properties:
+                tenant: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '200': { description: New tenant-bound session cookie set }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: No active membership in requested tenant }
+  /api/v1/workspace:
+    get:
+      tags: [Workspace]
+      summary: Read active tenant workspace collections
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string }
+          description: Optional consistency check; must equal the active session tenant.
+      responses:
+        '200':
+          { description: Tenant workspace, user, memberships, settings, and resource collections }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Requested tenant differs from active session }
+    post:
+      tags: [Workspace]
+      summary: Create or update a tenant workspace record
+      description: >-
+        Supports contacts, gifts, campaigns, tasks, prospects, introductions, emails,
+        automations, activities, relationships, organizations, households, segments,
+        events, and settings. Gifts are immutable; automation simulation is no-send.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant, resource, data]
+              properties:
+                tenant: { type: string, description: Must match the active session tenant }
+                resource:
+                  type: string
+                  enum:
+                    [
+                      contacts,
+                      gifts,
+                      campaigns,
+                      tasks,
+                      prospects,
+                      introductions,
+                      emails,
+                      automations,
+                      activities,
+                      relationships,
+                      organizations,
+                      households,
+                      segments,
+                      events,
+                      settings
+                    ]
+                action: { type: string, enum: [create, update, archive, simulate] }
+                data: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: Record updated or simulation result returned }
+        '201': { description: Record created }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Tenant mismatch or role is not permitted }
+        '409': { description: Duplicate data conflict }
+        '422': { description: Validation or relationship reference failed }
+  /api/v1/contacts/import:
+    post:
+      tags: [Contacts]
+      summary: Preview or import CSV contacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant, csv]
+              properties:
+                tenant: { type: string, description: Must match the active session tenant }
+                csv: { type: string, maxLength: 1000000 }
+                apply: { type: boolean, default: false }
+      responses:
+        '200': { description: Import preview; no records written }
+        '201': { description: Import completed after validation }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Tenant mismatch or role cannot import }
+        '409': { description: Preview contains duplicate or invalid rows; no import performed }
+        '413': { description: CSV too large }
+  /api/v1/contacts/export:
+    get:
+      tags: [Contacts]
+      summary: Export active tenant contacts as CSV
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string }
+          description: Optional consistency check; must equal the active session tenant.
+      responses:
+        '200':
+          description: CSV download
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Tenant mismatch or role cannot export }
+  /api/v1/integrations:
+    get:
+      tags: [Integrations]
+      summary: Read redacted provider status for active tenant
+      responses:
+        '200':
+          description: No credentials are returned; requires owner/admin membership.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items: { $ref: '#/components/schemas/IntegrationStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Owner/admin role required }
+  /api/v1/integrations/{provider}:
+    parameters:
+      - in: path
+        name: provider
+        required: true
+        schema: { type: string, enum: [openai, ses] }
+    put:
+      tags: [Integrations]
+      summary: Replace encrypted tenant provider credentials
+      description: >-
+        Submit secrets in the JSON body over HTTPS only. Secrets are encrypted at rest,
+        cannot be read back, and never appear in status responses. SES can be enabled only when the sender identity is verified and the account has production access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [apiKey, model]
+                  properties:
+                    apiKey: { type: string, minLength: 20, maxLength: 512, writeOnly: true }
+                    model: { type: string, maxLength: 100 }
+                    enabled: { type: boolean, default: true }
+                - type: object
+                  additionalProperties: false
+                  required: [region, fromAddress, accessKeyId, secretAccessKey]
+                  properties:
+                    region: { type: string }
+                    fromAddress: { type: string, format: email }
+                    accessKeyId: { type: string, writeOnly: true }
+                    secretAccessKey: { type: string, writeOnly: true }
+                    sessionToken: { type: string, writeOnly: true }
+                    enabled:
+                      {
+                        type: boolean,
+                        default: false,
+                        description: Setting true triggers live SES identity and production-access checks.
+                      }
+      responses:
+        '200':
+          {
+            description: Configuration stored; SES enabled status reflects live identity/account verification
+          }
+        '400': { description: HTTPS required for provider secrets }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Demo session or owner/admin role required }
+        '422': { description: Provider configuration invalid }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [Integrations]
+      summary: Remove active tenant provider credentials
+      responses:
+        '200': { description: Encrypted credentials removed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Owner/admin role required }
+  /api/v1/ai/summary:
+    post:
+      tags: [AI]
+      summary: Request a read-only contact aggregate summary
+      description: Sends only contact counts by stage and the question; no names or emails. Owner/admin only. Request-volume caps do not guarantee a dollar spend cap.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [question]
+              properties:
+                question: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          { description: Model answer and usage summary; prompts and answers are not persisted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Owner/admin role required }
+        '409': { description: OpenAI integration is not enabled }
+        '422': { description: Input exceeds per-request budget }
+        '429': { description: Per-tenant rate or daily input budget reached }
+        '502': { description: Provider request failed }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/relationships/paths:
+    post:
+      tags: [Relationships]
+      summary: Find a bounded relationship path
+      description: Results describe documented affiliations, not verified social familiarity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant, fromId, toId]
+              properties:
+                tenant: { type: string, description: Must match the active session tenant }
+                fromId: { type: string, format: uuid }
+                toId: { type: string, format: uuid }
+                depth: { type: integer, minimum: 1, maximum: 3, default: 2 }
+      responses:
+        '200': { description: Documented paths and evidence caveat }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: One or both nodes are outside the tenant workspace }
+  /api/v1/research/jobs:
+    post:
+      tags: [Research]
+      summary: Preview or import records parsed from provided 990-PF XML
+      description: This endpoint parses caller-supplied filing XML; it is not a live research source connector. Imported evidence does not grant contact permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant, xml, sourceUrl]
+              properties:
+                tenant: { type: string, description: Must match the active session tenant }
+                xml: { type: string, maxLength: 5242880 }
+                sourceUrl: { type: string, format: uri }
+                apply: { type: boolean, default: false }
+      responses:
+        '200': { description: Preview results and duplicate count }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { description: XML parsing or request validation failed }
+  /api/v1/email:
+    get:
+      tags: [Integrations]
+      summary: List active-tenant email drafts and send-batch status
+      responses:
+        '200': { description: Drafts, SES send readiness and recent batch summary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Email access is limited to owner, admin, and marketer roles }
+  /api/v1/email/preview:
+    post:
+      tags: [Integrations]
+      summary: Preview exact consented, unsuppressed recipients
+      description: Returns no approval token if audience is empty or exceeds current SES quota. Consent, suppression and segment membership are reevaluated on approval and immediately before provider send. In SES sandbox, only individually verified recipient identities are included. An optional schedule is frozen with a content and recipient hash in the tenant time zone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                emailId: { type: string, format: uuid }
+                segmentId: { type: string, format: uuid, nullable: true }
+                scheduledAt:
+                  {
+                    type: string,
+                    format: date-time,
+                    nullable: true,
+                    description: At least 15 minutes and no more than 90 days in the future
+                  }
+      responses:
+        '200':
+          {
+            description: Exact recipient list,
+            count,
+            sender,
+            SES quota and expiring one-use preview token
+          }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Demo mode or role cannot send }
+        '409': { description: SES integration is not verified and enabled }
+        '422': { description: Draft cannot be sent }
+  /api/v1/email/send:
+    post:
+      tags: [Integrations]
+      summary: Explicitly approve and queue or schedule the exact email preview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [previewToken, approved]
+              properties:
+                previewToken: { type: string, minLength: 32 }
+                approved: { const: true }
+      responses:
+        '202':
+          {
+            description: Send batch queued or scheduled; one message ledger/outbox event per recipient is created transactionally
+          }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Demo mode or role cannot send }
+        '409':
+          {
+            description: Preview expired,
+            consumed,
+            or consent/suppression/draft changed since preview
+          }
+  /api/v1/email/test-send:
+    post:
+      tags: [Integrations]
+      summary: Send one test to the signed-in user's account email
+      description: Requires explicit approval. The address comes from the authenticated account, never the request. Uses the transactional encrypted ledger and quota pacing; in SES sandbox the account address must be individually verified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [emailId, approved]
+              properties:
+                emailId: { type: string, format: uuid }
+                approved: { const: true }
+      responses:
+        '200':
+          {
+            description: Test accepted,
+            already accepted idempotently,
+            or uncertain with automatic resend blocked
+          }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Demo mode or role cannot send }
+        '422': { description: Draft, user address or explicit approval is invalid }
+  /api/v1/email/templates:
+    get:
+      tags: [Integrations]
+      summary: List active-tenant email templates
+      responses:
+        '200': { description: Sanitized reusable templates and delivery batches }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Integrations]
+      summary: Create a reusable sanitized email template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, subject, htmlBody]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 180 }
+                subject: { type: string, minLength: 1, maxLength: 998 }
+                htmlBody: { type: string, maxLength: 100000 }
+                textBody: { type: string, maxLength: 95000 }
+                variables: { type: array, maxItems: 40, items: { type: string, maxLength: 80 } }
+      responses:
+        '201': { description: Template saved with strict allowlist sanitization and audit entry }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/email/templates/{id}:
+    patch:
+      tags: [Integrations]
+      summary: Update an active-tenant email template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Updated template }
+        '404': { description: Template not found in active tenant }
+    delete:
+      tags: [Integrations]
+      summary: Delete an active-tenant email template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Template deleted and action audited }
+        '404': { description: Template not found in active tenant }
+  /api/v1/email/consent/request:
+    post:
+      tags: [Integrations]
+      summary: Request double opt-in for an email address
+      description: Public, enumeration-resistant request. A matching contact receives a tenant SES transactional message with a 48-hour confirmation link; an unknown address receives the same response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant, email]
+              properties:
+                tenant: { type: string, maxLength: 80 }
+                email: { type: string, format: email, maxLength: 254 }
+      responses:
+        '202': { description: Request accepted without revealing contact existence }
+        '422': { description: Invalid address or request }
+  /api/v1/email/preferences/{token}:
+    get:
+      tags: [Integrations]
+      summary: Read email marketing preference from a one-year link
+      parameters:
+        - {
+            name: token,
+            in: path,
+            required: true,
+            schema: { type: string, minLength: 32, maxLength: 128 }
+          }
+      responses:
+        '200': { description: Current marketing preference only; donor identity is not returned }
+        '404': { description: Invalid or expired link }
+    post:
+      tags: [Integrations]
+      summary: Withdraw marketing consent or request a new double opt-in
+      parameters:
+        - {
+            name: token,
+            in: path,
+            required: true,
+            schema: { type: string, minLength: 32, maxLength: 128 }
+          }
+      responses:
+        '200':
+          {
+            description: Withdrawal immediately suppresses queued and scheduled marketing messages; subscribing requires a separate double opt-in confirmation
+          }
+        '404': { description: Invalid or expired link }
+  /api/v1/receipts:
+    get:
+      tags: [Giving]
+      summary: List generated donation acknowledgments for the active tenant
+      description: Finance roles and tenant administrators only. Filter by contactId to show one donor's acknowledgments. Results are created by the gift.recorded worker and do not imply email delivery.
+      parameters:
+        - in: query
+          name: contactId
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Up to 100 tenant-scoped receipt metadata records }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Demo mode or role cannot view receipts }
+        '503': { description: Receipt storage is unavailable }
+  /api/v1/receipts/{id}:
+    get:
+      tags: [Giving]
+      summary: Download an authenticated HTML donation acknowledgment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          {
+            description: Private HTML attachment generated from immutable gift snapshot,
+            content-type text/html
+          }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Demo mode or role cannot view receipts }
+        '404': { description: Receipt does not exist in the active tenant }
+        '503': { description: Receipt storage is unavailable }
+  /api/v1/reports/{id}:
+    get:
+      tags: [Reports]
+      summary: Read giving ledger or donor retention report
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, enum: [giving, retention] }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: campaignId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: currency
+          schema: { type: string, minLength: 3, maxLength: 3 }
+        - in: query
+          name: year
+          schema: { type: integer }
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv] }
+      responses:
+        '200':
+          {
+            description: Tenant-scoped financial definitions and summary; CSV export is limited to giving ledger and finance roles
+          }
+        '400': { description: CSV is available only for giving ledger }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Active role cannot export financial data }
+        '404': { description: Unknown report }
+  /api/v1/webhooks/ses:
+    post:
+      security: []
+      tags: [Integrations]
+      summary: Ingest signed SES delivery, bounce, complaint, open and click notifications
+      description: Accepts only SNS Notification messages from the configured topic ARN with a verified AWS SNS signature; subscription confirmation and unsigned payloads are rejected. Opens/clicks are aggregate engagement signals and opens are unreliable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Signed event applied idempotently or unsupported event ignored }
+        '400': { description: Invalid event body }
+        '403': { description: SNS signature, topic or message type not trusted }
+        '413': { description: Request exceeds body limit }
+        '503': { description: Topic or event processing unavailable }
+  /unsubscribe/{token}:
+    parameters:
+      - in: path
+        name: token
+        required: true
+        schema: { type: string }
+    get:
+      security: []
+      summary: Render unsubscribe confirmation without changing preferences
+      responses:
+        '200': { description: Confirmation page; GET is non-mutating }
+    post:
+      security: []
+      summary: Confirm unsubscribe for the associated recipient address
+      responses:
+        '200': { description: Tenant suppression recorded and marketing consent revoked }
+        '400': { description: Invalid or expired signed token }
+        '404': { description: Token does not correspond to a sent message }
+  /email-consent/{token}:
+    parameters:
+      - {
+          in: path,
+          name: token,
+          required: true,
+          schema: { type: string, minLength: 32, maxLength: 128 }
+        }
+    get:
+      security: []
+      summary: Render a non-mutating double opt-in confirmation form
+      responses:
+        '200': { description: Confirmation form; GET does not change consent }
+    post:
+      security: []
+      summary: Confirm double opt-in for marketing email
+      responses:
+        '200':
+          {
+            description: Grant recorded with double-opt-in evidence; only an unsubscribe suppression may be cleared
+          }
+  /email-preferences/{token}:
+    parameters:
+      - {
+          in: path,
+          name: token,
+          required: true,
+          schema: { type: string, minLength: 32, maxLength: 128 }
+        }
+    get:
+      security: []
+      summary: Render current marketing preference and unsubscribe control
+      responses:
+        '200': { description: Preference page; GET is non-mutating }
+    post:
+      security: []
+      summary: Withdraw marketing consent from preference center
+      responses:
+        '200': { description: Tenant suppression and queued-send cancellation recorded }
+  /api/v1/files:
+    get:
+      tags: [Files]
+      summary: List current tenant file metadata
+      parameters:
+        - in: query
+          name: contactId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200': { description: File metadata and `hasMore`; content bytes are never included }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { description: Private file storage unavailable in demo or unconfigured environment }
+    post:
+      tags: [Files]
+      summary: Upload one private contact file
+      description: >-
+        Multipart fields are `file` and optional `contactId`. Maximum file size is 25 MiB.
+        Production upload fails closed unless the private ClamAV scanner is configured and returns clean.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                contactId: { type: string, format: uuid }
+      responses:
+        '201': { description: Private file metadata; storage object ID remains hidden }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { description: File or multipart request exceeds size limit }
+        '415': { description: Unsupported media type or mismatched file signature }
+        '422': { description: Contact is outside tenant or scanner detected malware }
+        '503': { description: File storage/scanner unavailable; production upload fails closed }
+  /api/files/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Files]
+      summary: Download an authenticated tenant file
+      description: No tenant ID is accepted; the file row is resolved under the current session tenant and RLS.
+      responses:
+        '200': { description: Private file bytes with attachment disposition and nosniff headers }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: File is unavailable in the current tenant }
+        '503': { description: File was not scanned or storage is unavailable }
+  /api/v1/payments/connect:
+    get:
+      tags: [Payments]
+      summary: Read active tenant Stripe Connect status
+      responses:
+        '200': { description: Redacted connection status }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Payments]
+      summary: Begin Stripe Connect OAuth
+      responses:
+        '303': { description: Redirect to Stripe authorization }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Owner/admin required or demo is disabled }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [Payments]
+      summary: Revoke tenant Stripe Connect authorization
+      responses:
+        '200': { description: Stripe account disconnected and local mapping removed }
+        '403': { description: Owner/admin required }
+  /api/v1/payments/connect/callback:
+    get:
+      tags: [Payments]
+      summary: Complete Stripe Connect OAuth callback
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema: { type: string }
+        - in: query
+          name: state
+          required: true
+          schema: { type: string }
+      responses:
+        '303': { description: Redirect back to integration settings }
+        '400': { description: OAuth was declined or callback is invalid }
+        '409': { description: Stripe account mode does not match platform mode }
+  /api/v1/donation-intents:
+    post:
+      tags: [Payments]
+      security: []
+      summary: Create or resume an online donation intent
+      description: Returns a payment client secret for the connected tenant account. Requires configured Stripe keys and tenant Connect authorization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant, requestKey, amountMinor, donorName, donorEmail]
+              properties:
+                tenant: { type: string }
+                campaignId: { type: string, format: uuid }
+                requestKey: { type: string, minLength: 16, maxLength: 128 }
+                amountMinor: { type: integer, minimum: 50, maximum: 25000000 }
+                frequency: { type: string, enum: [once, monthly, annual], default: once }
+                donorName: { type: string, maxLength: 120 }
+                donorEmail: { type: string, format: email }
+      responses:
+        '201':
+          {
+            description: Intent created; response includes publishableKey,
+            clientSecret,
+            connectedAccountId,
+            checkoutToken,
+            amount and frequency
+          }
+        '200': { description: Existing idempotent intent resumed }
+        '409': { description: Request cannot resume or idempotency key reused with different data }
+        '429': { description: Donation attempt rate limit reached }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/webhooks/stripe:
+    post:
+      tags: [Payments]
+      security: []
+      summary: Receive a verified Stripe Connect webhook
+      parameters:
+        - in: header
+          name: stripe-signature
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Event accepted or duplicate safely ignored }
+        '400': { description: Signature invalid }
+        '413': { description: Event body too large }
+        '503': { description: Event could not be processed; Stripe may retry }
+  /api/v1/audit:
+    get:
+      tags: [Workspace]
+      summary: Read active tenant audit history
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string }
+      responses:
+        '200': { description: Tenant audit entries; owner/admin authorization applies }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Owner/admin required }
+  /api/v1/automations:
+    get:
+      tags: [Automations]
+      summary: List tenant workflows and draft/published versions
+      responses:
+        '200': { description: Workflow definitions }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Automations]
+      summary: Create a versioned workflow draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant, name, definition]
+              properties:
+                tenant: { type: string }
+                name: { type: string, maxLength: 180 }
+                definition: { type: object }
+      responses:
+        '201': { description: Workflow version 1 created }
+        '422': { description: Invalid workflow definition }
+  /api/v1/automations/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Automations]
+      summary: Read a workflow in the active tenant
+      responses:
+        '200': { description: Workflow draft and published versions }
+        '404': { description: Workflow not found }
+    patch:
+      tags: [Automations]
+      summary: Append an immutable workflow draft version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                type: object,
+                required: [definition],
+                properties: { name: { type: string }, definition: { type: object } }
+              }
+      responses:
+        '200': { description: New draft version saved }
+        '422': { description: Invalid workflow definition }
+    delete:
+      tags: [Automations]
+      summary: Pause an active workflow
+      responses:
+        '200': { description: Workflow paused }
+  /api/v1/automations/{id}/validate:
+    post:
+      tags: [Automations]
+      summary: Validate the current draft graph
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Validation result and issues }
+  /api/v1/automations/{id}/publish:
+    post:
+      tags: [Automations]
+      summary: Publish and activate a validated draft
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Published workflow version }
+        '422': { description: Workflow validation failed }
+  /api/v1/automations/{id}/simulate:
+    post:
+      tags: [Automations]
+      summary: Simulate a draft with no side effects
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                type: object,
+                required: [contactId],
+                properties: { contactId: { type: string, format: uuid } }
+              }
+      responses:
+        '200': { description: Simulated steps, with sideEffects false }
+  /api/v1/automations/{id}/runs:
+    get:
+      tags: [Automations]
+      summary: List recent execution runs for a workflow
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Run history }
+  /api/v1/automation-runs/{runId}:
+    parameters:
+      - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Automations]
+      summary: Read run state and completed steps
+      responses:
+        '200': { description: Run and step history }
+    patch:
+      tags: [Automations]
+      summary: Retry a failed run or cancel active work
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                type: object,
+                required: [action],
+                properties: { action: { type: string, enum: [retry, cancel] } }
+              }
+      responses:
+        '200': { description: Run action accepted }
+        '409': { description: Run is not eligible for the requested action }
+  /api/v1/tasks:
+    get:
+      tags: [Stewardship]
+      summary: List tenant tasks, optionally filtered by contact and due date
+      parameters:
+        - { in: query, name: contactId, schema: { type: string, format: uuid } }
+        - { in: query, name: from, schema: { type: string, format: date-time } }
+        - { in: query, name: to, schema: { type: string, format: date-time } }
+      responses:
+        '200': { description: Tasks with assigned user and recurrence metadata }
+    post:
+      tags: [Stewardship]
+      summary: Create an assigned or recurring task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant, title]
+              properties:
+                tenant: { type: string }
+                title: { type: string, maxLength: 180 }
+                contactId: { type: string, format: uuid, nullable: true }
+                dueAt: { type: string, format: date-time, nullable: true }
+                priority: { type: string, enum: [low, normal, high, urgent] }
+                assignedTo: { type: string, format: uuid }
+                recurrence: { type: object }
+      responses:
+        '201': { description: Task saved; due time schedules an internal reminder }
+  /api/v1/tasks/calendar.ics:
+    get:
+      tags: [Stewardship]
+      summary: Download a private UTC iCalendar of task due dates
+      responses:
+        '200': { description: iCalendar file, content: text/calendar }
+  /api/v1/notifications:
+    get:
+      tags: [Stewardship]
+      summary: List the signed-in user's private tenant notification inbox
+      responses:
+        '200': { description: Internal notifications }
+  /api/v1/stewardship:
+    get:
+      tags: [Stewardship]
+      summary: List contact stewardship plans and steps
+      responses:
+        '200': { description: Stewardship plans }
+    post:
+      tags: [Stewardship]
+      summary: Create or update a stewardship plan
+      responses:
+        '200': { description: Plan updated }
+        '201': { description: Plan created }
+  /api/v1/proposals:
+    get:
+      tags: [Stewardship]
+      summary: List proposals and stages
+      responses:
+        '200': { description: Proposal pipeline }
+    post:
+      tags: [Stewardship]
+      summary: Create a tenant proposal with integer minor-unit ask amount
+      responses:
+        '201': { description: Proposal created }
+    patch:
+      tags: [Stewardship]
+      summary: Update proposal stage, ask, owner, close date or notes
+      responses:
+        '200': { description: Proposal updated }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: giveloom_session
+  schemas:
+    IntegrationStatus:
+      type: object
+      required: [provider, configured, enabled, status, metadata]
+      properties:
+        provider: { type: string, enum: [openai, ses] }
+        configured: { type: boolean }
+        enabled: { type: boolean }
+        status:
+          {
+            type: string,
+            enum:
+              [not_configured, disabled, disabled_demo, enabled_unverified, configured_unverified]
+          }
+        metadata: { type: object, additionalProperties: true }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unavailable:
+      description: A required server-side service is unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
