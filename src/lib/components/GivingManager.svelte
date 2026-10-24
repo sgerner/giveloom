@@ -540,20 +540,21 @@
 						submit();
 					}}
 				>
+					{#if action === 'record'}<button
+							type="button"
+							class="text-button"
+							onclick={() => {
+								donorPicker?.clearSelection();
+								form.contactId = '';
+							}}>Record as anonymous / unassigned</button
+						>{/if}
 					{#if ['record', 'pledge', 'soft_credit'].includes(action)}<ContactPicker
 							bind:this={donorPicker}
 							{tenant}
 							bind:contactId={form.contactId}
 							label="Donor / credited supporter"
 							required={action !== 'record'}
-						/>{#if action === 'record'}<button
-								type="button"
-								class="text-button"
-								onclick={() => {
-									donorPicker?.clearSelection();
-									form.contactId = '';
-								}}>Record as anonymous / unassigned</button
-							>{/if}{/if}
+						/>{/if}
 					{#if ['record', 'pledge', 'correction', 'soft_credit', 'matching'].includes(action)}<div
 							class="field-pair"
 						>

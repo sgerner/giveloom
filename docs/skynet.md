@@ -34,10 +34,10 @@ docker compose --project-name giveloom --file compose.skynet.yml up -d --wait po
 docker compose --project-name giveloom --file compose.skynet.yml up -d updater
 ```
 
-The updater container needs the Docker CLI and access to `/var/run/docker.sock`.
+The updater container needs the Docker CLI and access to `/var/run/docker.sock`. That access is equivalent to host administration. Treat write access to `main` as deployment access, review dependency and migration changes before pushing, and restrict repository maintainers accordingly.
 It mounts the repository at the same absolute path as the host, so Compose
 build contexts and bind mounts resolve correctly through the Docker daemon.
-The state directory is mounted at `/state`; the updater fetches the configured
+The updater runs as UID/GID 1000 with the Docker socket group added (`DOCKER_GID=979` on this host; verify with `stat -c %g /var/run/docker.sock`). Its writable HOME is temporary, while repository and state ownership remain with the host account. The state directory is mounted at `/state`; the updater fetches the configured
 public GitHub repository's `main` branch every 900 seconds by default. It
 accepts only a fast-forward from `main` and never resets the checkout. New app images are built and tagged with
 the full Git SHA before downtime. It holds an exclusive lock in the state
@@ -94,3 +94,14 @@ application traffic, review the migration failure, and rehearse restoration on
 a copy before restoring production. The repository's `ops/restore.sh` targets
 the base Compose stack and must not be run unchanged on Skynet; use the named
 Skynet Compose file and the selected backup paths when carrying out recovery.
+
+## Deployment record — 24 October 2026
+
+- Public repository: https://github.com/sgerner/giveloom; public URL: https://give.stevengerner.com.
+- The host's existing Cloudflare DDNS service manages `give.stevengerner.com` as a DNS-only A record. The existing Caddy issues its TLS certificate through DNS-01 and proxies to `giveloom-web:3000` on the shared `proxy` network. Prior Caddy and DDNS configurations were backed up before editing.
+- Web, worker, PostgreSQL, Redis and ClamAV all became healthy. Bootstrap and migrations exited successfully; 31 migration files through `0033` were applied. No demonstration tenants were seeded.
+- HTTPS returned 200 on desktop and mobile, with no browser page errors. The private workspace API returned JSON 401 without credentials, and production demo entry returned 404.
+- The app and migration database roles both have `NOSUPERUSER` and `NOBYPASSRLS`. PostgreSQL, Redis, ClamAV and the web app have no published host ports; traffic enters through the existing Caddy.
+- A benign stream submitted from the web container to ClamAV returned `stream: OK`.
+- SES, Stripe and tenant AI credentials are not configured. In particular, staff verification email cannot be delivered until SES is configured. Do not treat the live landing page as provider acceptance.
+- Off-host encrypted backup delivery, a production restore rehearsal, manual screen-reader review and physical-device installation remain operator gates.

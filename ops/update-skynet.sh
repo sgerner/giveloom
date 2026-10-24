@@ -16,6 +16,7 @@ PROJECT="${COMPOSE_PROJECT_NAME:-giveloom}"
 COMMAND_TIMEOUT_SECONDS="${UPDATE_COMMAND_TIMEOUT_SECONDS:-1800}"
 
 cd "$ROOT"
+mkdir -p "${HOME:-/tmp/giveloom-updater}"
 mkdir -p "$STATE_DIR/backups"
 chmod 700 "$STATE_DIR"
 
@@ -57,6 +58,7 @@ write_sha_file() {
 	tmp="$(mktemp "$STATE_DIR/.sha.XXXXXX")"
 	printf '%s\n' "$sha" > "$tmp"
 	chmod 600 "$tmp"
+	chown --reference="$STATE_DIR" "$tmp"
 	mv -f "$tmp" "$file"
 }
 
@@ -76,6 +78,7 @@ persist_app_version() {
 		printf 'APP_VERSION=%s\n' "$sha" > "$tmp"
 	fi
 	chmod 600 "$tmp"
+	if [[ -f "$ROOT/.env" ]]; then chown --reference="$ROOT/.env" "$tmp"; fi
 	mv -f "$tmp" "$ROOT/.env"
 }
 
@@ -178,7 +181,8 @@ update_once() {
 		log 'Files backup failed; old application services were restarted.'
 		return 1
 	fi
-	if ! chmod 600 "$db_dump" "$files_tar"; then
+	if ! chmod 600 "$db_dump" "$files_tar"
+	chown --reference="$STATE_DIR" "$backup_dir" "$db_dump" "$files_tar"; then
 		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
 		log 'Could not secure the backup files; old application services were restarted.'
 		return 1

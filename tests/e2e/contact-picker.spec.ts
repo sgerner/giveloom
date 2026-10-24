@@ -49,6 +49,7 @@ test('typing after choosing a supporter invalidates the selection and anonymous 
 
 	await donorSearch.fill('Amara');
 	await expect(donorSearch).toHaveAttribute('placeholder', 'Search by name or email…');
+	await expect(page.getByRole('option', { name: /Amara Lee/ })).toBeVisible();
 	await expect(dialog.getByRole('button', { name: 'Clear selected supporter' })).toHaveCount(0);
 	await expect
 		.poll(() => donorSearch.evaluate((input: HTMLInputElement) => input.validity.valid))

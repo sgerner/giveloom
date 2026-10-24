@@ -26,12 +26,15 @@ Screenshots show synthetic Riverstone demo data in the desktop and mobile experi
 - **Track gifts with a reliable ledger.** Record donations, pledges, installments, refunds, corrections, hard and soft credits, and household totals by currency. Receipt snapshots preserve the details used for an acknowledgment; authenticated HTML receipt downloads are available. Receipt email is not currently sent.
 - **Run campaigns and events.** Publish donation campaigns and public forms, attribute gifts, manage funds and appeals, and support event registration, ticketing, volunteer sign-up, and check-in.
 - **Plan stewardship.** Track activities, tasks, recurring follow-ups, assignments, reminders, stewardship plans, and proposal stages.
+- **Compose thoughtful outreach.** Build reusable email templates with previews and a plain-text fallback, review consent and suppression rules, approve recipient snapshots, schedule delivery, and inspect send history. Actual sending requires configured AWS SES.
 - **Coordinate workflows.** Build and validate versioned automations with triggers, waits, approvals, retries, simulations, and run history.
 - **Understand relationships and research.** Map relationship paths with provenance and privacy scope. Review prospect research and caller-supplied IRS 990-PF XML imports; live research sources are disabled unless permitted sources and terms are configured.
 - **See fundraising performance.** Use ledger-backed reports for gifts, fees, settlements, corrections, reconciliation, donor and household totals, saved report definitions, and audited exports.
 - **Give supporters a portal.** Donors can access gift and receipt history, update profile and communication preferences, and use a secure one-time sign-in link.
 - **Keep administration accountable.** Manage verified signup, recovery, invitations, roles, sessions, TOTP MFA, API tokens, webhooks, audit history, retention, tenant branding, and encrypted provider credentials.
 - **Use an AI assistant with controls.** The assistant supports structured, role-filtered CRM operations with budgets, audit records, redaction, previews, and one-use confirmation for writes. A tenant supplies and pays for its own provider key; paid billing has not been validated.
+
+Choose from 24 included themes, light/dark/system appearance, tenant branding, and responsive layouts. PWA support provides installation guidance, an explicit update prompt, and a generic offline fallback that keeps private donor pages out of the browser cache.
 
 ### Integrations and current gates
 
@@ -50,7 +53,7 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite (normally `http://localhost:5173`). With no `DATABASE_URL`, the app starts in labeled demo mode. Demo data is local to that checkout and is not a durable or multi-user database. Demo mode blocks live payment, email, and other provider operations.
+Open the local URL printed by Vite (normally `http://localhost:5173`) and choose **Explore the demo**. With no `DATABASE_URL`, the app starts in labeled demo mode. Demo data is local to that checkout and is not a durable or multi-user database. Demo mode blocks live payment, email, and other provider operations.
 
 ## Local development with PostgreSQL
 
