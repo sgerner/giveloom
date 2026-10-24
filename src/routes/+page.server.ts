@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import { demoModeAvailable } from '$lib/server/store';
 export function load() {
 	const demoAvailable = demoModeAvailable();
@@ -17,7 +18,7 @@ export function load() {
 			return null;
 		}
 	};
-	const demoUrl = validPublicUrl(env.PUBLIC_DEMO_URL);
+	const demoUrl = validPublicUrl(publicEnv.PUBLIC_DEMO_URL);
 	const realAppUrl = validPublicUrl(env.REAL_APP_URL);
 	return { demoAvailable, demoUrl, realAppUrl };
 }

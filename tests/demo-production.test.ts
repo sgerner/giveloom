@@ -4,10 +4,11 @@ const privateEnv = vi.hoisted(() => ({
 	ENABLE_DEMO: '',
 	DATABASE_URL: '',
 	SESSION_SECRET: 'test-secret',
-	PUBLIC_DEMO_URL: '',
 	REAL_APP_URL: ''
 }));
+const publicEnv = vi.hoisted(() => ({ PUBLIC_DEMO_URL: '' }));
 vi.mock('$env/dynamic/private', () => ({ env: privateEnv }));
+vi.mock('$env/dynamic/public', () => ({ env: publicEnv }));
 
 import { load as homepage } from '../src/routes/+page.server';
 import { demoModeAvailable } from '../src/lib/server/store';
@@ -21,7 +22,7 @@ afterEach(() => {
 	process.env.NODE_ENV = oldNodeEnv;
 	privateEnv.ENABLE_DEMO = '';
 	privateEnv.DATABASE_URL = '';
-	privateEnv.PUBLIC_DEMO_URL = '';
+	publicEnv.PUBLIC_DEMO_URL = '';
 	privateEnv.REAL_APP_URL = '';
 });
 
@@ -125,7 +126,7 @@ describe('production homepage demo links', () => {
 	it('exposes an HTTPS demo link while keeping demo sessions disabled on the database app', () => {
 		process.env.NODE_ENV = 'production';
 		privateEnv.DATABASE_URL = 'postgres://real-app';
-		privateEnv.PUBLIC_DEMO_URL = 'https://demo.example.test/ignored-path';
+		publicEnv.PUBLIC_DEMO_URL = 'https://demo.example.test/ignored-path';
 		expect(homepage()).toMatchObject({
 			demoAvailable: false,
 			demoUrl: 'https://demo.example.test'
@@ -138,7 +139,7 @@ describe('production homepage demo links', () => {
 			'javascript:alert(1)',
 			'https://user:password@demo.example.test'
 		]) {
-			privateEnv.PUBLIC_DEMO_URL = url;
+			publicEnv.PUBLIC_DEMO_URL = url;
 			expect(homepage().demoUrl).toBeNull();
 		}
 	});

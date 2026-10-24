@@ -26,11 +26,11 @@ access and the configured SNS callback topic; automatic deployment does not
 configure those external services. Set the Cloudflare DNS record and existing
 Caddy routing separately as described by the host's network setup.
 
-Start the stack from the repository directory with the standalone file and
-project name:
+Before the first build, set `APP_VERSION` in `.env` to the full output of `git rev-parse HEAD`. Initialize the deployed-SHA marker only after services are healthy. Start the stack from the repository directory with the standalone file and project name:
 
 ```sh
-docker compose --project-name giveloom --file compose.skynet.yml up -d --wait postgres redis db-bootstrap migrate web worker clamav
+docker compose --project-name giveloom --file compose.skynet.yml build web updater
+docker compose --project-name giveloom --file compose.skynet.yml up -d --wait postgres redis db-bootstrap migrate web worker demo clamav
 docker compose --project-name giveloom --file compose.skynet.yml up -d updater
 ```
 
