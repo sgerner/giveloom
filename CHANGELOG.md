@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added an isolated public production demo with one-click homepage entry alongside real account creation. Demo sessions require explicit enablement without a production database, use a separate signing key and temporary data, and block real accounts, provider credentials and live sends. GiveLoom hostnames now use Cloudflare HTTPS redirects.
+
 - Fixed stale donor selections and tenant refreshes, concurrent workflow frequency-cap checks and a scheduler lock conflict, webhook IP classification, and impossible saved-report dates. Added browser and real PostgreSQL regression coverage; see [the worktree review](docs/REVIEW.md).
 
 - Fixed the core route for empty-workspace email and automations editor access, added hydration guards and paged draft loading, and improved microsecond cursor precision. Final local verification passed 137 PostgreSQL tests across 40 files, all 10 database-backed scenarios, all 9 demo journeys, all 6 production-build PWA checks, the web/worker build, worker smoke and paired database/files restore drill. Email draft editing was verified without sending.

@@ -16,6 +16,7 @@ services:
     image: giveloom:${APP_VERSION:-local}
     environment:
       CLAMAV_HOST: clamav
+      PUBLIC_DEMO_URL: https://demo-give.stevengerner.com
     networks:
       default:
       proxy:
@@ -34,6 +35,48 @@ services:
         limits:
           cpus: '1.00'
           memory: 2G
+  demo:
+    image: giveloom:${APP_VERSION:-local}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      ORIGIN: https://demo-give.stevengerner.com
+      PUBLIC_APP_URL: https://demo-give.stevengerner.com
+      REAL_APP_URL: https://give.stevengerner.com
+      ENABLE_DEMO: 'true'
+      DEMO_DATA_PATH: /data/demo.json
+      SESSION_SECRET: ${DEMO_SESSION_SECRET:?Set a distinct DEMO_SESSION_SECRET}
+      BODY_SIZE_LIMIT: 3M
+    networks:
+      proxy:
+        aliases: [giveloom-demo]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      [
+        '/tmp:size=32m,noexec,nosuid,uid=1000,gid=1000',
+        '/data:size=64m,noexec,nosuid,uid=1000,gid=1000'
+      ]
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 512M
   updater:
     build:
       context: .

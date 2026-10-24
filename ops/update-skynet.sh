@@ -152,20 +152,20 @@ update_once() {
 		log 'Could not make PostgreSQL and Redis healthy; update deferred.'
 		return 1
 	fi
-	if ! compose stop web worker; then
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+	if ! compose stop web worker demo; then
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'Could not stop application services; update deferred.'
 		return 1
 	fi
 
 	if ! stamp="$(date -u +%Y%m%dT%H%M%SZ)"; then
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'Could not create a backup timestamp; old application services were restarted.'
 		return 1
 	fi
 	backup_dir="$STATE_DIR/backups/$stamp"
 	if ! mkdir -m 700 "$backup_dir"; then
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'Could not create the private backup directory; old application services were restarted.'
 		return 1
 	fi
@@ -173,36 +173,36 @@ update_once() {
 	files_tar="$backup_dir/files.tar.gz"
 	if ! compose exec -T postgres sh -ec 'pg_dump --format=custom --no-owner --username "$POSTGRES_USER" "$POSTGRES_DB"' > "$db_dump"; then
 		rm -rf "$backup_dir"
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'Database backup failed; old application services were restarted.'
 		return 1
 	fi
 	if ! compose run --rm --no-deps --entrypoint tar web -C /data -czf - uploads exports > "$files_tar"; then
 		rm -rf "$backup_dir"
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'Files backup failed; old application services were restarted.'
 		return 1
 	fi
 	if ! chmod 600 "$db_dump" "$files_tar"; then
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'Could not secure the backup files; old application services were restarted.'
 		return 1
 	fi
 	if [[ ! -s "$db_dump" || ! -s "$files_tar" ]]; then
 		rm -rf "$backup_dir"
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'A backup artifact is empty; old application services were restarted.'
 		return 1
 	fi
 	log "Paired backup saved at $backup_dir."
 
 	if ! compose run --rm --no-deps db-bootstrap; then
-		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
+		APP_VERSION="$old_sha" compose start web worker demo >/dev/null 2>&1 || true
 		log 'Database bootstrap failed; migration did not run and the deployed SHA is unchanged.'
 		return 1
 	fi
 	if ! with_timeout env APP_VERSION="$target_sha" docker compose --project-name "$PROJECT" --file "$COMPOSE_FILE" run --rm --no-deps migrate; then
-		compose stop web worker >/dev/null 2>&1 || true
+		compose stop web worker demo >/dev/null 2>&1 || true
 		if ! write_sha_file "$BLOCKED_FILE" "$target_sha"; then
 			log 'Could not persist the migration failure pause marker; stopping the updater for operator attention.'
 			exit 1
@@ -211,8 +211,8 @@ update_once() {
 		return 1
 	fi
 
-	if ! APP_VERSION="$target_sha" compose up -d --no-deps --wait web worker; then
-		compose stop web worker >/dev/null 2>&1 || true
+	if ! APP_VERSION="$target_sha" compose up -d --no-deps --wait web worker demo; then
+		compose stop web worker demo >/dev/null 2>&1 || true
 		if ! write_sha_file "$BLOCKED_FILE" "$target_sha"; then
 			log 'Could not persist the health failure pause marker; stopping the updater for operator attention.'
 			exit 1

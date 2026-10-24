@@ -4,7 +4,7 @@
 
 GiveLoom brings donor relationships, fundraising, stewardship, and operations into one self-hosted workspace for nonprofit teams. Keep the full picture of a supporter—from first contact to gifts, events, and follow-up—connected in a CRM designed around consent, clear records, and careful handling of donor data.
 
-[Visit GiveLoom](https://give.stevengerner.com) · [Repository](https://github.com/sgerner/giveloom) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Visit GiveLoom](https://give.stevengerner.com) · [Explore the demo](https://demo-give.stevengerner.com/demo/start) · [Repository](https://github.com/sgerner/giveloom) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 > GiveLoom is under active development. The core product paths have substantial local test coverage, but features remain in progress until their provider, deployment, and manual acceptance checks are complete. Review [feature status](FEATURE_STATUS.md) and the [validation record](docs/VALIDATION.md) before using it with real donor data.
 
@@ -82,7 +82,7 @@ npm run build:worker
 node --env-file=.env build/worker.js
 ```
 
-See [`.env.example`](.env.example) and [operations](docs/operations.md) for provider configuration and secret handling. Keep `.env` out of version control. Demo mode is disabled in production; the hosted instance does not expose the local demo fixtures.
+See [`.env.example`](.env.example) and [operations](docs/operations.md) for provider configuration and secret handling. Keep `.env` out of version control. The hosted homepage offers an isolated public demo at `demo-give.stevengerner.com` alongside account creation. It has its own signing key, temporary synthetic data, and no production database or provider credentials. Demo changes are shared and temporary: use sample data only. The real database app never accepts demo sessions.
 
 ### Checks
 

@@ -998,6 +998,10 @@
 			</div>
 		</header>
 		<main id="main-content">
+			{#if workspace?.tenant.demo}<p class="banner" role="note">
+					Shared synthetic demo — use sample data only. Changes are temporary and visible to other
+					demo visitors.
+				</p>{/if}
 			{#if error}<div class="banner error" role="alert">
 					{error}<button class="icon-button" onclick={() => (error = '')} aria-label="Dismiss error"
 						><X size={16} /></button

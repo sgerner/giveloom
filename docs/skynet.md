@@ -112,3 +112,11 @@ Skynet Compose file and the selected backup paths when carrying out recovery.
 - SES, Stripe and tenant AI credentials are not configured. In particular, staff verification email cannot be delivered until SES is configured. Do not treat the live landing page as provider acceptance.
 - Off-host encrypted backup delivery, a production restore rehearsal, manual screen-reader review and physical-device installation remain operator gates.
 - A controlled source update from `daee166` to `ef5c440` passed: image build, paired pre-migration backup, bootstrap, migration, web/worker health checks and atomic deployed-SHA/APP_VERSION persistence. The dump catalog and paired files archive were validated; backup directories are mode `0700`, files and `.env` are `0600`, owned by the host account. This validates the local update path, not off-host recovery.
+
+## Public demo and HTTPS
+
+`give.stevengerner.com` and `demo-give.stevengerner.com` are proxied Cloudflare records. The existing zone rule redirects every HTTP request to HTTPS with status 308 and preserves its path and query. Caddy also redirects HTTP when reached directly and sends HSTS on these two sites. The separate `giveloom-ddns` service in the host's existing DDNS stack manages these two proxied records; the media/DDNS service retains its existing DNS-only domains.
+
+The main homepage links to `/demo/start` on the separate demo hostname. The `demo` service uses the same application image but only receives a dedicated `DEMO_SESSION_SECRET`, `ENABLE_DEMO=true`, and public URL settings. It receives no database, Redis, email, payment or AI credentials and has no persistent volumes. Its synthetic workspace and extension records live in a bounded temporary filesystem and reset when the container is recreated. All visitors share this synthetic demo; never enter real personal data. Real signup, credential storage and provider actions are blocked there, and sign-in/signup links lead back to the real app. The real database app rejects demo sessions even if demo mode is accidentally enabled in its environment.
+
+Set a unique `DEMO_SESSION_SECRET` before using the updated shared-host Compose file. `scripts/setup-env.mjs` generates one for new installations. The updater now stops and health-checks the demo alongside web/worker so new source is deployed consistently.

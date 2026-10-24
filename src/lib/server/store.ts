@@ -562,5 +562,6 @@ export function dbConfigured() {
 	return Boolean(env.DATABASE_URL);
 }
 export function demoModeAvailable() {
-	return process.env.NODE_ENV !== 'production';
+	if (process.env.NODE_ENV === 'production') return env.ENABLE_DEMO === 'true' && !env.DATABASE_URL;
+	return true;
 }

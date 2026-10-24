@@ -37,7 +37,7 @@
 	<div class="welcome-header">
 		<a class="brand" href="/"
 			><img src="/brand/generous-dots.svg" alt="" width="40" height="40" /> Donor CRM</a
-		><a class="secondary" href="/login">Sign in ↗</a>
+		><a class="secondary" href={`${data.realAppUrl || ''}/login`}>Sign in ↗</a>
 	</div>
 	<div class="welcome-content">
 		<span class="eyebrow">A little connection. A lasting difference.</span>
@@ -45,10 +45,17 @@
 		<p>
 			A thoughtful home for your donors, your next big idea, and all the good you’re here to do.
 		</p>
-		{#if data.demoAvailable}<button class="primary" onclick={enter} disabled={pending || !ready}
+		{#if data.demoUrl}
+			<a class="primary" href={`${data.demoUrl}/demo/start`}>Explore the demo <span>↗</span></a>
+		{:else if data.demoAvailable}
+			<button class="primary" onclick={enter} disabled={pending || !ready}
 				>{pending ? 'Opening your workspace…' : 'Explore the demo'} <span>↗</span></button
-			>{:else}<a class="primary" href="/signup">Create your workspace <span>↗</span></a>{/if}
-		{#if data.demoAvailable}<p class="muted small">
+			>
+		{/if}
+		<a class="secondary" href={`${data.realAppUrl || ''}/signup`}
+			>Create your workspace <span>↗</span></a
+		>
+		{#if data.demoAvailable || data.demoUrl}<p class="muted small">
 				Riverstone Community Fund · Synthetic demonstration<br />No live payments, emails, or paid
 				AI calls.
 			</p>{/if}

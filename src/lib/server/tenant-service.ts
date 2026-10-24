@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import type { PoolClient } from 'pg';
 import { getPool } from './database';
-import { getWorkspace } from './store';
+import { demoModeAvailable, getWorkspace } from './store';
 export type TenantSession = NonNullable<App.Locals['session']>;
 export class ServiceError extends Error {
 	constructor(
@@ -62,7 +62,7 @@ export async function demoAuthorization(
 	roles: readonly string[] | null = null
 ) {
 	if (!session) throw new ServiceError('Sign in first.', 401);
-	if (!session.demo || process.env.NODE_ENV === 'production')
+	if (!session.demo || !demoModeAvailable())
 		throw new ServiceError('Synthetic demo is unavailable.', 403);
 	if (roles && !roles.includes(session.role))
 		throw new ServiceError('Your role cannot perform this action.', 403);

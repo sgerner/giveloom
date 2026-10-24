@@ -20,6 +20,7 @@ const values = {
 	DATABASE_URL: `postgresql://donor_crm_app:${appPassword}@${host}/donor_crm`,
 	MIGRATION_DATABASE_URL: `postgresql://donor_crm_migrator:${migrationPassword}@${host}/donor_crm`,
 	SESSION_SECRET: secret(),
+	DEMO_SESSION_SECRET: secret(),
 	EMAIL_SIGNING_SECRET: secret(),
 	FILE_SIGNING_SECRET: secret(),
 	JOB_SIGNING_SECRET: secret(),
