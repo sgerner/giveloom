@@ -14,7 +14,7 @@ COPY --from=build --chown=node:node /app/build ./build
 COPY --from=build --chown=node:node /app/scripts ./scripts
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/migrations ./migrations
-RUN mkdir -p /data/uploads /data/exports /backups && chown -R node:node /data /backups /app
+RUN mkdir -p /data/uploads /data/exports /backups && chown -R node:node /data /backups
 USER node
 EXPOSE 3000
 CMD ["node", "build"]

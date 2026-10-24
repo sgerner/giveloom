@@ -233,7 +233,9 @@ describe('CRM documented details and import lifecycle', () => {
 			const second = await contactPage(session, { limit: 25, cursor: first.nextCursor! });
 			expect(second.items).toHaveLength(25);
 			expect(new Set([...first.items, ...second.items].map((row: any) => row.id)).size).toBe(50);
-		}
+		},
+		// Includes inserting 100,000 indexed fixtures on shared CI runners.
+		30_000
 	);
 	it.skipIf(!enabled)(
 		'returns canonical contact details with merged aliases and lifetime giving',
