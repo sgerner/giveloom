@@ -86,8 +86,14 @@ iteration uses the new script/configuration:
 docker compose --project-name giveloom --file compose.skynet.yml restart updater
 ```
 
-To run one polling iteration for a controlled maintenance check, run
-`docker compose --project-name giveloom --file compose.skynet.yml run --rm -e UPDATE_ONCE=true updater`.
+To run one polling iteration for a controlled maintenance check, stop the scheduled updater first: it holds an exclusive lock for its lifetime. Then run the check and restart the scheduled service:
+
+```sh
+docker compose --project-name giveloom --file compose.skynet.yml stop updater
+docker compose --project-name giveloom --file compose.skynet.yml run --rm --no-deps -e UPDATE_ONCE=true updater
+docker compose --project-name giveloom --file compose.skynet.yml up -d --no-deps updater
+```
+
 The normal service uses its 900-second poll loop. Restore and rollback are operator-led because
 database migrations may not be reversible. Preserve the paired backup, stop
 application traffic, review the migration failure, and rehearse restoration on
@@ -105,3 +111,4 @@ Skynet Compose file and the selected backup paths when carrying out recovery.
 - A benign stream submitted from the web container to ClamAV returned `stream: OK`.
 - SES, Stripe and tenant AI credentials are not configured. In particular, staff verification email cannot be delivered until SES is configured. Do not treat the live landing page as provider acceptance.
 - Off-host encrypted backup delivery, a production restore rehearsal, manual screen-reader review and physical-device installation remain operator gates.
+- A controlled source update from `daee166` to `ef5c440` passed: image build, paired pre-migration backup, bootstrap, migration, web/worker health checks and atomic deployed-SHA/APP_VERSION persistence. The dump catalog and paired files archive were validated; backup directories are mode `0700`, files and `.env` are `0600`, owned by the host account. This validates the local update path, not off-host recovery.
