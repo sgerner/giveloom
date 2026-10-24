@@ -55,31 +55,32 @@ read_sha_file() {
 
 write_sha_file() {
 	local file="$1" sha="$2" tmp
-	tmp="$(mktemp "$STATE_DIR/.sha.XXXXXX")"
-	printf '%s\n' "$sha" > "$tmp"
-	chmod 600 "$tmp"
-	chown --reference="$STATE_DIR" "$tmp"
-	mv -f "$tmp" "$file"
+	tmp="$(mktemp "$STATE_DIR/.sha.XXXXXX")" || return 1
+	if ! printf '%s\n' "$sha" > "$tmp" || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$file"; then
+		rm -f "$tmp"
+		return 1
+	fi
 }
 
 persist_app_version() {
 	local sha="$1" tmp
-	tmp="$(mktemp "$ROOT/.env.update.XXXXXX")"
-	if [[ -f "$ROOT/.env" ]]; then
-		awk -v version="$sha" '
-			/^APP_VERSION=/ {
-				if (!written++) print "APP_VERSION=" version
-				next
-			}
-			{ print }
-			END { if (!written) print "APP_VERSION=" version }
-		' "$ROOT/.env" > "$tmp"
-	else
-		printf 'APP_VERSION=%s\n' "$sha" > "$tmp"
+	[[ -f "$ROOT/.env" ]] || return 1
+	tmp="$(mktemp "$ROOT/.env.update.XXXXXX")" || return 1
+	if ! awk -v version="$sha" '
+		/^APP_VERSION=/ {
+			if (!written++) print "APP_VERSION=" version
+			next
+		}
+		{ print }
+		END { if (!written) print "APP_VERSION=" version }
+	' "$ROOT/.env" > "$tmp"; then
+		rm -f "$tmp"
+		return 1
 	fi
-	chmod 600 "$tmp"
-	if [[ -f "$ROOT/.env" ]]; then chown --reference="$ROOT/.env" "$tmp"; fi
-	mv -f "$tmp" "$ROOT/.env"
+	if ! chmod 600 "$tmp" || ! mv -f "$tmp" "$ROOT/.env"; then
+		rm -f "$tmp"
+		return 1
+	fi
 }
 
 update_once() {
@@ -125,6 +126,7 @@ update_once() {
 		return 1
 	fi
 	if [[ "$target_sha" == "$old_sha" ]]; then
+		log "Already deployed ${target_sha:0:12}."
 		return 0
 	fi
 
@@ -181,8 +183,7 @@ update_once() {
 		log 'Files backup failed; old application services were restarted.'
 		return 1
 	fi
-	if ! chmod 600 "$db_dump" "$files_tar"
-	chown --reference="$STATE_DIR" "$backup_dir" "$db_dump" "$files_tar"; then
+	if ! chmod 600 "$db_dump" "$files_tar"; then
 		APP_VERSION="$old_sha" compose start web worker >/dev/null 2>&1 || true
 		log 'Could not secure the backup files; old application services were restarted.'
 		return 1
